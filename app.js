@@ -1053,8 +1053,9 @@ function reportHeader(kind, name) {
   return `
   <div class="toolbar no-print">
     <button class="btn" data-pdf="1">📄 تصدير التقرير PDF</button>
-    <span class="muted">في نافذة الطباعة اختر "حفظ كـ PDF" (Save as PDF).</span>
+    <button class="btn small alt" data-print="1">🖨️ طباعة</button>
   </div>
+  <div class="pdf-ready no-print" hidden></div>
   <div class="print-only report-head">
     <h1>${esc(kind)}: ${esc(name)}</h1>
     <p>تاريخ التقرير: ${esc(date)} · المصادر: OpenAlex و ORCID و Retraction Watch</p>
@@ -1062,12 +1063,209 @@ function reportHeader(kind, name) {
   </div>`;
 }
 
-function exportPdf() {
+function printReport() {
   const prev = document.title;
-  const day = new Date().toISOString().slice(0, 10);
-  document.title = `${reportName} - ${day}`; // يُستخدم اسماً لملف PDF
+  document.title = pdfFileName().replace(/\.pdf$/, '');
   window.print();
   setTimeout(() => { document.title = prev; }, 1000);
+}
+
+function pdfFileName() {
+  const day = new Date().toISOString().slice(0, 10);
+  return `${reportName} - ${day}`.replace(/[\\/:*?"<>|]+/g, '-') + '.pdf';
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload = resolve;
+    el.onerror = () => reject(new Error('تعذّر تحميل مكتبة PDF. تأكد من اتصال الإنترنت.'));
+    document.head.appendChild(el);
+  });
+}
+
+// نبني نسخة نظيفة من التقرير ونقسّمها إلى كتل صغيرة (الجداول كل 18 صفاً)
+// حتى لا تتجاوز الصور حدود الذاكرة في الجوال، ثم نضع الكتل في صفحات A4.
+// النصوص الإنجليزية داخل سياق عربي تُعزل باتجاه LTR حتى لا تنقلب الأقواس عند الرسم.
+function fixBidi(root) {
+  const arabic = /[\u0600-\u06FF]/;
+  const latin = /[A-Za-z]/;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const n of nodes) {
+    const t = n.nodeValue;
+    if (!latin.test(t)) continue;
+    if (!arabic.test(t)) {
+      if (!t.trim()) continue;
+      const span = document.createElement('span');
+      span.dir = 'ltr';
+      span.style.unicodeBidi = 'isolate';
+      span.style.display = 'inline-block';
+      span.textContent = t.trim();
+      n.replaceWith(span);
+      continue;
+    }
+    // نص مختلط: نعزل كل مقطع إنجليزي (مع أقواسه) في span
+    const frag = document.createDocumentFragment();
+    const re = /(\(?[A-Za-z0-9][A-Za-z0-9 .,'’&:()\-\/%–·]*[A-Za-z0-9)%])/g;
+    let last = 0, m;
+    while ((m = re.exec(t))) {
+      frag.appendChild(document.createTextNode(t.slice(last, m.index)));
+      const span = document.createElement('span');
+      span.dir = 'ltr';
+      span.style.unicodeBidi = 'isolate';
+      span.textContent = m[1];
+      frag.appendChild(span);
+      last = m.index + m[1].length;
+    }
+    frag.appendChild(document.createTextNode(t.slice(last)));
+    n.replaceWith(frag);
+  }
+}
+
+function buildPdfBlocks(host) {
+  const blocks = [];
+  const add = (nodes, cls = '') => {
+    const d = document.createElement('div');
+    d.className = 'pdf-block ' + cls;
+    nodes.forEach((n) => d.appendChild(n));
+    host.appendChild(d);
+    blocks.push(d);
+  };
+  const head = $('#results .report-head');
+  if (head) add([head.cloneNode(true)], 'pdf-head');
+
+  const sections = [...document.querySelectorAll('#results > section.card'), ...document.querySelectorAll('#help .glossary')];
+  for (const sec of sections) {
+    const clone = sec.cloneNode(true);
+    clone.querySelectorAll('.no-print, button, .explain, td.links').forEach((n) => n.remove());
+    clone.querySelectorAll('th').forEach((th) => { if (th.textContent.trim() === 'روابط' || !th.textContent.trim()) th.remove(); });
+    clone.querySelectorAll('td').forEach((td) => { if (!td.textContent.trim() && !td.children.length) td.remove(); });
+    clone.querySelectorAll('details').forEach((d) => {
+      const div = document.createElement('div');
+      [...d.childNodes].forEach((c) => { if (c.nodeName !== 'SUMMARY') div.appendChild(c); else { const h = c.querySelector('h3'); if (h) div.appendChild(h); } });
+      d.replaceWith(div);
+    });
+    // تسطيح المحتوى إلى عناصر متتالية
+    const items = [];
+    const walk = (el) => {
+      for (const c of [...el.children]) {
+        if (c.matches('.table-wrap, table')) items.push(c);
+        else if (c.matches('div') && c.querySelector('.table-wrap, table, .gloss-item') && !c.matches('.flag')) walk(c);
+        else items.push(c);
+      }
+    };
+    fixBidi(clone);
+    walk(clone);
+    let pending = [];
+    const flush = () => { if (pending.length) add(pending); pending = []; };
+    for (const it of items) {
+      if (it.matches('.table-wrap, table')) {
+        const tbl = it.matches('table') ? it : it.querySelector('table');
+        const rows = [...tbl.querySelectorAll('tbody > tr')];
+        const thead = tbl.querySelector('thead');
+        for (let i = 0; i < Math.max(rows.length, 1); i += 3) {
+          const t = document.createElement('table');
+          if (thead && i % 12 === 0) t.appendChild(thead.cloneNode(true));
+          const tb = document.createElement('tbody');
+          rows.slice(i, i + 3).forEach((r) => tb.appendChild(r.cloneNode(true)));
+          t.appendChild(tb);
+          pending.push(t);
+          flush();
+        }
+      } else if (it.matches('h2, h3')) {
+        flush();
+        pending.push(it); // العنوان يبقى مع ما بعده
+      } else {
+        pending.push(it);
+        if (!pending.some((n) => n.matches && n.matches('h2, h3'))) flush();
+        else if (pending.length > 2) flush();
+      }
+    }
+    flush();
+    host.appendChild(Object.assign(document.createElement('div'), { className: 'pdf-gap' }));
+  }
+  return blocks;
+}
+
+async function exportPdf(btn) {
+  const ready = btn.closest('#results').querySelector('.pdf-ready');
+  ready.hidden = true;
+  btn.disabled = true;
+  const host = document.createElement('div');
+  host.className = 'pdf-mode';
+  try {
+    setStatus('جارٍ تجهيز ملف PDF…');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    document.body.appendChild(host);
+    const blocks = buildPdfBlocks(host);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    const pageW = 210, pageH = 297, margin = 10, contentW = pageW - margin * 2;
+    const mmPerPx = contentW / host.clientWidth;
+    let y = margin;
+    for (const [i, block] of blocks.entries()) {
+      setStatus(`جارٍ تجهيز ملف PDF… ${Math.round(((i + 1) / blocks.length) * 100)}%`);
+      const canvas = await window.html2canvas(block, { scale: 2, backgroundColor: '#ffffff', logging: false });
+      const h = block.offsetHeight * mmPerPx;
+      const gap = block.previousElementSibling?.classList.contains('pdf-gap') ? 4 : 1.5;
+      if (y + gap + h > pageH - margin && y > margin) { pdf.addPage(); y = margin; } else if (y > margin) y += gap;
+      if (h <= pageH - margin * 2) {
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.78), 'JPEG', margin, y, contentW, h);
+        y += h;
+      } else {
+        // كتلة أطول من صفحة: نقسّمها
+        const sliceMm = pageH - margin * 2;
+        const pxPerMm = canvas.height / h;
+        for (let off = 0; off < h; off += sliceMm) {
+          if (off > 0) { pdf.addPage(); y = margin; }
+          const part = document.createElement('canvas');
+          part.width = canvas.width;
+          part.height = Math.min(sliceMm, h - off) * pxPerMm;
+          part.getContext('2d').drawImage(canvas, 0, -off * pxPerMm);
+          pdf.addImage(part.toDataURL('image/jpeg', 0.78), 'JPEG', margin, y, contentW, part.height / pxPerMm);
+          y += part.height / pxPerMm;
+        }
+      }
+    }
+    const pages = pdf.getNumberOfPages();
+    for (let p = 1; p <= pages; p++) {
+      pdf.setPage(p);
+      pdf.setFontSize(8);
+      pdf.setTextColor(120);
+      pdf.text(`${p} / ${pages}`, pageW / 2, pageH - 4, { align: 'center' });
+    }
+    const name = pdfFileName();
+    const blob = pdf.output('blob');
+    const url = URL.createObjectURL(blob);
+    const file = new File([blob], name, { type: 'application/pdf' });
+    const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+    setStatus('');
+    ready.hidden = false;
+    ready.innerHTML = `
+      <b>✅ التقرير جاهز (${pages} صفحة)</b>
+      <div class="toolbar">
+        <a class="btn" href="${url}" download="${esc(name)}">📥 تحميل PDF</a>
+        ${canShare ? '<button class="btn alt" data-share="1">📤 مشاركة / حفظ في الملفات</button>' : ''}
+        <a class="btn small alt" href="${url}" target="_blank" rel="noopener">فتح</a>
+      </div>`;
+    ready._file = file;
+    ready.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (err) {
+    setStatus('تعذّر إنشاء PDF: ' + err.message + ' — جرّب زر الطباعة.', true);
+  } finally {
+    host.remove();
+    btn.disabled = false;
+  }
+}
+
+async function sharePdf(btn) {
+  const file = btn.closest('.pdf-ready')._file;
+  try { await navigator.share({ files: [file], title: file.name }); } catch { /* أُلغيت المشاركة */ }
 }
 
 /* ---------- الربط ---------- */
@@ -1094,7 +1292,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }));
 
   $('#results').addEventListener('click', async (e) => {
-    if (e.target.closest('button[data-pdf]')) { exportPdf(); return; }
+    const pdfBtn = e.target.closest('button[data-pdf]');
+    if (pdfBtn) { exportPdf(pdfBtn); return; }
+    if (e.target.closest('button[data-print]')) { printReport(); return; }
+    const shareBtn = e.target.closest('button[data-share]');
+    if (shareBtn) { sharePdf(shareBtn); return; }
     if (e.target.closest('button[data-dept-back]')) { renderDept(); return; }
     if (e.target.closest('button[data-back]')) { $('#results').innerHTML = backHtml; return; }
     const btn = e.target.closest('button[data-relation], button[data-author], button[data-inst], button[data-dept-inst], button[data-dept-subfield], button[data-dept-names], button[data-dept-scan]');

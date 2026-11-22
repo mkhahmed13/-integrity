@@ -156,3 +156,27 @@ h4 { margin: 16px 0 4px; }
 .btns .btn { margin: 2px; }
 .btn.alt { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
 .flag.info p { color: var(--text); margin: 4px 0; }
+
+/* ---------- إنشاء PDF مباشر ---------- */
+a.btn { text-decoration: none; display: inline-block; }
+.pdf-ready { background: var(--low-bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; }
+.pdf-ready .toolbar { margin: 8px 0 0; }
+.pdf-mode {
+  --bg: #fff; --card: #fff; --text: #111; --muted: #555; --border: #d5d9df; --accent: #0b4f8a;
+  --high: #b00020; --high-bg: #fde8e8; --med: #8a5200; --med-bg: #fff1dc; --low: #1e6b25; --low-bg: #e6f4e7;
+  position: absolute; left: -10000px; top: 0; width: 760px; direction: rtl;
+  background: #fff; color: #111; font-size: 13px; line-height: 1.55;
+}
+.pdf-mode .pdf-block { background: #fff; padding: 2px 4px; }
+.pdf-mode .print-only, .pdf-mode .report-head { display: block; }
+.pdf-mode .report-head { border-bottom: 2px solid #111; padding-bottom: 6px; }
+.pdf-mode .report-head h1 { font-size: 20px; margin: 0 0 4px; }
+.pdf-mode .report-head p { margin: 2px 0; color: #444; }
+.pdf-mode .report-head .note { color: #b00020; font-weight: 600; }
+.pdf-mode h2 { margin: 0; font-size: 18px; }
+.pdf-mode h3 { margin: 6px 0 4px; padding-bottom: 4px; border-bottom: 1px solid #d5d9df; font-size: 15px; }
+.pdf-mode table { width: 100%; table-layout: auto; }
+.pdf-mode td, .pdf-mode th { overflow-wrap: break-word; padding: 5px 6px; }
+.pdf-mode td:first-child:not(:only-child) { white-space: normal; }
+.pdf-mode .stats { grid-template-columns: repeat(4, 1fr); }
+.pdf-mode .links a { color: #0b4f8a; }
