@@ -1047,8 +1047,14 @@ async function analyzeRelation(authorId) {
 
 let reportName = '';
 
+let reportFile = 'report';
+const REPORT_SLUG = { 'تقرير فحص باحث': 'researcher', 'تقرير فحص مؤسسة': 'institution', 'تقرير فحص قسم': 'department', 'علاقة باحث بالجامعة': 'relation' };
+
 function reportHeader(kind, name) {
   reportName = `${kind} - ${name}`;
+  // اسم الملف بالإنجليزية لأن بعض المتصفحات ترفض الأسماء العربية في التحميل
+  const ascii = String(name).normalize('NFKD').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+  reportFile = [REPORT_SLUG[kind] || 'report', ascii].filter(Boolean).join('-');
   const date = new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' });
   return `
   <div class="toolbar no-print">
@@ -1065,14 +1071,14 @@ function reportHeader(kind, name) {
 
 function printReport() {
   const prev = document.title;
-  document.title = pdfFileName().replace(/\.pdf$/, '');
+  document.title = `${reportName} - ${new Date().toISOString().slice(0, 10)}`;
   window.print();
   setTimeout(() => { document.title = prev; }, 1000);
 }
 
 function pdfFileName() {
   const day = new Date().toISOString().slice(0, 10);
-  return `${reportName} - ${day}`.replace(/[\\/:*?"<>|]+/g, '-') + '.pdf';
+  return `${reportFile}-${day}.pdf`;
 }
 
 function loadScript(src) {
