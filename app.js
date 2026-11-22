@@ -232,7 +232,7 @@ async function searchInstitutions(q) {
               <b>${esc(i.display_name)}</b>
               <div class="muted">${esc(i.geo?.city || '')} ${esc(i.country_code || '')} · ${num(i.works_count)} ورقة</div>
             </div>
-            <button class="btn small" data-inst="${esc(shortId(i.id))}">فحص</button>
+            <button class="btn small" ${mode === 'department' ? 'data-dept-inst' : 'data-inst'}="${esc(shortId(i.id))}">${mode === 'department' ? 'اختيار' : 'فحص'}</button>
           </li>`).join('')}
       </ul>
     </section>`;
@@ -240,7 +240,7 @@ async function searchInstitutions(q) {
 
 /* ---------- تحليل الباحث ---------- */
 
-async function fetchAllWorks(authorId, max) {
+async function fetchAllWorks(authorId, max, quiet = false) {
   const select = 'id,doi,title,type,publication_year,is_retracted,primary_location,authorships,referenced_works,abstract_inverted_index,primary_topic,cited_by_count';
   const works = [];
   let cursor = '*';
@@ -248,7 +248,7 @@ async function fetchAllWorks(authorId, max) {
     const page = await oa('/works', { filter: `author.id:${authorId}`, 'per-page': 200, cursor, select, sort: 'publication_year:desc' });
     works.push(...page.results);
     cursor = page.meta.next_cursor;
-    setStatus(`جارٍ جلب الأوراق… ${works.length} من ${num(page.meta.count)}`);
+    if (!quiet) setStatus(`جارٍ جلب الأوراق… ${works.length} من ${num(page.meta.count)}`);
     if (!page.results.length) break;
   }
   return works.slice(0, max);
@@ -266,6 +266,9 @@ async function analyzeAuthor(idOrOrcid) {
   setStatus('');
   const report = buildAuthorReport(author, works);
   renderAuthor(author, works, report, employments);
+  if (dept.rows.length) {
+    $('#results').insertAdjacentHTML('afterbegin', '<div class="toolbar no-print"><button class="btn small" data-dept-back="1">→ رجوع لنتائج القسم</button></div>');
+  }
 }
 
 // الأنواع التي تُعدّ "أوراقاً" فعلية (نستبعد المسودات preprints ومجموعات البيانات والمستودعات مثل arXiv و Kaggle)
@@ -597,6 +600,167 @@ async function analyzeInstitution(instId) {
   </section>`;
 }
 
+/* ---------- فحص قسم كامل ---------- */
+
+// OpenAlex لا يسجّل الأقسام، لذلك نحدد القسم بطريقتين:
+// (أ) التخصص الدقيق (subfield) لأوراق الباحثين المنشورة باسم الجامعة، أو
+// (ب) قائمة أسماء أعضاء القسم كما هي في موقع الجامعة.
+const dept = { inst: null, label: '', rows: [], running: false };
+
+async function selectDeptInstitution(instId) {
+  setStatus('جارٍ جلب تخصصات المؤسسة…');
+  const inst = await oa('/institutions/' + instId);
+  const since = `${new Date().getFullYear() - 5}-01-01`;
+  const subs = await oa('/works', { filter: `institutions.id:${shortId(inst.id)},from_publication_date:${since}`, group_by: 'primary_topic.subfield.id' });
+  dept.inst = inst;
+  setStatus('');
+  const options = (subs.group_by || []).filter((g) => g.key && g.key !== 'unknown').slice(0, 80)
+    .map((g) => `<option value="${esc(shortId(g.key))}">${esc(g.key_display_name)} (${num(g.count)})</option>`).join('');
+  $('#results').innerHTML = `
+  <section class="card">
+    <h3>🏫 فحص قسم في ${esc(inst.display_name)}</h3>
+    <p class="muted">قواعد البيانات المفتوحة لا تسجّل الأقسام، فاختر إحدى الطريقتين:</p>
+
+    <h4>الطريقة 1: حسب التخصص</h4>
+    <p class="muted">يجلب أكثر الباحثين نشراً باسم الجامعة في هذا التخصص خلال آخر 5 سنوات (الرقم بين القوسين = عدد الأوراق).</p>
+    <div class="search">
+      <select id="subfield">${options}</select>
+      <select id="deptSize"><option value="20">20 باحثاً</option><option value="40" selected>40 باحثاً</option><option value="60">60 باحثاً</option></select>
+      <button class="btn" data-dept-subfield="1">عرض الباحثين</button>
+    </div>
+
+    <h4>الطريقة 2: قائمة أعضاء القسم (أدق)</h4>
+    <p class="muted">انسخ أسماء أعضاء هيئة التدريس من صفحة القسم في موقع الجامعة (بالإنجليزية)، اسم في كل سطر، أو أرقام ORCID.</p>
+    <textarea id="deptNames" rows="7" placeholder="Ahmed Ali Alghamdi&#10;Sara Mohammed Alharbi&#10;رقم ORCID مثل 0000-0000-0000-0000"></textarea>
+    <div class="toolbar"><button class="btn" data-dept-names="1">مطابقة الأسماء</button></div>
+  </section>`;
+}
+
+async function loadDeptBySubfield() {
+  const sub = $('#subfield');
+  const size = Number($('#deptSize').value);
+  const instId = shortId(dept.inst.id);
+  setStatus('جارٍ جلب باحثي التخصص…');
+  const since = `${new Date().getFullYear() - 5}-01-01`;
+  const data = await oa('/works', { filter: `institutions.id:${instId},primary_topic.subfield.id:${sub.value},from_publication_date:${since}`, group_by: 'authorships.author.id' });
+  const groups = (data.group_by || []).filter((g) => g.key && g.key !== 'unknown').slice(0, size);
+  const authors = await fetchAuthorsByIds(groups.map((g) => shortId(g.key)));
+  dept.label = sub.options[sub.selectedIndex].text.replace(/\s*\([\d,]+\)$/, '');
+  dept.rows = groups.map((g) => makeDeptRow(authors[shortId(g.key)], g.key_display_name, shortId(g.key), g.count)).filter(Boolean);
+  setStatus('');
+  renderDept();
+}
+
+async function loadDeptByNames() {
+  const lines = $('#deptNames').value.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 100);
+  if (!lines.length) return;
+  const instId = shortId(dept.inst.id);
+  const rows = [];
+  for (const [i, line] of lines.entries()) {
+    setStatus(`جارٍ مطابقة الأسماء… ${i + 1} من ${lines.length}`);
+    const orcid = line.match(/\d{4}-\d{4}-\d{4}-\d{3}[\dX]/i);
+    let a = null;
+    try {
+      if (orcid) a = await oa('/authors/orcid:' + orcid[0].toUpperCase());
+      else {
+        // نبحث أولاً بين من لهم انتماء للجامعة لتجنب الخلط بين الأسماء المتشابهة
+        const r = await oa('/authors', { search: line, filter: `affiliations.institution.id:${instId}`, 'per-page': 1 });
+        a = r.results[0] || null;
+      }
+    } catch { a = null; }
+    rows.push(a ? makeDeptRow(a, a.display_name, shortId(a.id), null, line) : { id: null, name: line, input: line, missing: true, score: null });
+  }
+  dept.label = 'قائمة أعضاء القسم';
+  dept.rows = rows;
+  setStatus('');
+  renderDept();
+}
+
+async function fetchAuthorsByIds(ids) {
+  const out = {};
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const r = await oa('/authors', { filter: `id:${chunk.join('|')}`, 'per-page': 50, select: 'id,display_name,last_known_institutions,works_count,orcid' });
+    for (const a of r.results) out[shortId(a.id)] = a;
+  }
+  return out;
+}
+
+function makeDeptRow(a, name, id, count, input) {
+  const instId = shortId(dept.inst.id);
+  const lki = a ? lastInstitutions(a) : [];
+  const primaryHere = lki.length > 0 && shortId(lki[0].id) === instId;
+  const foreign = lki.filter((i) => shortId(i.id) !== instId && i.country_code && i.country_code !== dept.inst.country_code);
+  return { id, name: a?.display_name || name, input, count, lki, primaryHere, foreign, worksCount: a?.works_count, score: null, flags: null };
+}
+
+async function scanDept() {
+  if (dept.running) return;
+  dept.running = true;
+  const todo = dept.rows.filter((r) => r.id && r.score === null);
+  let done = 0;
+  const max = Math.min(Number($('#maxWorks').value), 400);
+  const worker = async () => {
+    while (todo.length) {
+      const row = todo.shift();
+      try {
+        const author = await oa('/authors/' + row.id);
+        const works = await fetchAllWorks(row.id, max, true);
+        const rep = buildAuthorReport(author, works);
+        row.score = rep.score;
+        row.flags = rep.flags.filter((f) => f.level !== 'info').map((f) => ({ level: f.level, title: f.title }));
+        row.retracted = rep.retracted.length;
+      } catch (err) {
+        row.error = err.message;
+        if (/حدّ الطلبات/.test(err.message)) { todo.length = 0; setStatus(err.message, true); }
+      }
+      done++;
+      setStatus(`جارٍ فحص أعضاء القسم… ${done} من ${done + todo.length}`);
+      renderDept();
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  dept.running = false;
+  if (!$('#status').classList.contains('error')) setStatus('');
+  renderDept();
+}
+
+function renderDept() {
+  const rows = [...dept.rows].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+  const scanned = rows.filter((r) => r.score !== null);
+  const flagged = scanned.filter((r) => r.score >= 50).length;
+  const foreignCount = rows.filter((r) => !r.primaryHere && r.foreign?.length).length;
+  const retractedTotal = scanned.reduce((s, r) => s + (r.retracted || 0), 0);
+  const levelOf = (s) => (s >= 50 ? 'high' : s >= 20 ? 'med' : 'low');
+
+  $('#results').innerHTML = `
+  ${reportHeader('تقرير فحص قسم', `${dept.label} — ${dept.inst.display_name}`)}
+  <section class="card">
+    <h2>${esc(dept.label)}</h2>
+    <div class="muted">${esc(dept.inst.display_name)} ${esc(dept.inst.country_code || '')}</div>
+    <div class="stats">
+      <div class="stat"><span>الباحثون</span><b>${num(rows.filter((r) => !r.missing).length)}</b></div>
+      <div class="stat"><span>تم فحصهم</span><b>${num(scanned.length)}</b></div>
+      <div class="stat"><span>يستحقون التدقيق (50+)</span><b>${num(flagged)}</b></div>
+      <div class="stat"><span>أوراق مسحوبة</span><b>${num(retractedTotal)}</b></div>
+      <div class="stat"><span>انتماء أساسي خارج الجامعة</span><b>${num(foreignCount)}</b></div>
+    </div>
+    <div class="toolbar no-print" style="margin-top:12px">
+      ${scanned.length < rows.filter((r) => r.id).length ? `<button class="btn" data-dept-scan="1" ${dept.running ? 'disabled' : ''}>${dept.running ? 'جارٍ الفحص…' : '🔍 فحص الكل'}</button>` : ''}
+      <span class="muted">يُحلَّل حتى 400 ورقة لكل باحث. اضغط "تقرير" لتحليل كامل لأي باحث.</span>
+    </div>
+  </section>
+
+  <section class="card">
+    ${table(['الباحث', 'الانتماء الحالي', 'التقييم', 'المؤشرات', ''], rows.map((r) => r.missing ? `<tr><td>${esc(r.input)}</td><td colspan="4" class="muted">لم يُعثر عليه في OpenAlex</td></tr>` : `<tr>
+      <td><b>${esc(r.name)}</b>${r.input && r.input.toLowerCase() !== r.name.toLowerCase() ? `<div class="muted">المُدخل: ${esc(r.input)}</div>` : ''}${r.count ? `<div class="muted">${num(r.count)} ورقة في التخصص</div>` : ''}</td>
+      <td class="muted">${esc(r.lki.map(instLabel).join(' · ') || '—')} ${r.primaryHere ? '' : r.foreign.length ? '<span class="tag high">خارج الجامعة</span>' : ''}</td>
+      <td>${r.score === null ? (r.error ? '<span class="muted">خطأ</span>' : '—') : `<span class="score-pill ${levelOf(r.score)}">${r.score}</span>`}</td>
+      <td>${(r.flags || []).map((f) => `<span class="tag ${f.level}">${esc(f.title)}</span>`).join(' ') || (r.score === 0 ? '<span class="muted">لا مؤشرات</span>' : '')}</td>
+      <td><button class="btn small" data-author="${esc(r.id)}">تقرير</button></td></tr>`).join(''))}
+  </section>`;
+}
+
 /* ---------- تقرير PDF ---------- */
 
 let reportName = '';
@@ -637,17 +801,23 @@ document.addEventListener('DOMContentLoaded', () => {
     $('#q').placeholder = mode === 'author'
       ? 'اسم الباحث بالإنجليزية، أو رقم ORCID مثل 0000-0002-1825-0097'
       : 'اسم الجامعة بالإنجليزية، مثل King Abdulaziz University';
+    if (!dept.running) dept.rows = [];
     $('#results').innerHTML = '';
     setStatus('');
   }));
 
   $('#results').addEventListener('click', async (e) => {
     if (e.target.closest('button[data-pdf]')) { exportPdf(); return; }
-    const btn = e.target.closest('button[data-author], button[data-inst]');
+    if (e.target.closest('button[data-dept-back]')) { renderDept(); return; }
+    const btn = e.target.closest('button[data-author], button[data-inst], button[data-dept-inst], button[data-dept-subfield], button[data-dept-names], button[data-dept-scan]');
     if (!btn) return;
     btn.disabled = true;
     try {
+      if (btn.dataset.deptScan) { await scanDept(); return; }
       if (btn.dataset.author) await analyzeAuthor(btn.dataset.author);
+      else if (btn.dataset.deptInst) await selectDeptInstitution(btn.dataset.deptInst);
+      else if (btn.dataset.deptSubfield) await loadDeptBySubfield();
+      else if (btn.dataset.deptNames) await loadDeptByNames();
       else await analyzeInstitution(btn.dataset.inst);
       window.scrollTo({ top: $('#results').offsetTop - 10, behavior: 'smooth' });
     } catch (err) {

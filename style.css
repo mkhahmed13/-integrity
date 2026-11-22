@@ -122,3 +122,14 @@ th { color: var(--muted); font-weight: 600; }
   .links a[href]::after { content: ""; }
   .disclaimer { padding: 8px 0 0; border-top: 1px solid #ccc; }
 }
+
+/* ---------- فحص القسم ---------- */
+textarea { width: 100%; font: inherit; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); margin-top: 6px; }
+h4 { margin: 16px 0 4px; }
+.search select { min-width: 0; }
+#subfield { flex: 1; }
+.tabs { flex-wrap: wrap; }
+.score-pill { display: inline-block; min-width: 38px; text-align: center; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.score-pill.high { background: var(--high-bg); color: var(--high); }
+.score-pill.med { background: var(--med-bg); color: var(--med); }
+.score-pill.low { background: var(--low-bg); color: var(--low); }

@@ -10,7 +10,7 @@
 <header class="top">
   <div class="wrap">
     <h1>🔎 رصد الأبحاث المشبوهة</h1>
-    <p class="sub">أداة مفتوحة تفحص سجلّ النشر لأي باحث أو جامعة وتُظهر المؤشرات التي تستحق التدقيق: أوراق مسحوبة، نشر مفرط، "عبارات معذّبة"، انتماءات مزدوجة مشبوهة، استشهاد ذاتي مرتفع، ومنصب الباحث الأكاديمي.</p>
+    <p class="sub">أداة مفتوحة تفحص سجلّ النشر لأي باحث أو قسم أو جامعة وتُظهر المؤشرات التي تستحق التدقيق: أوراق مسحوبة، نشر مفرط، "عبارات معذّبة"، انتماءات مزدوجة مشبوهة، استشهاد ذاتي مرتفع، ومنصب الباحث الأكاديمي.</p>
   </div>
 </header>
 
@@ -18,6 +18,7 @@
   <section class="card">
     <div class="tabs" role="tablist">
       <button class="tab active" data-mode="author" role="tab">باحث / دكتور</button>
+      <button class="tab" data-mode="department" role="tab">قسم كامل</button>
       <button class="tab" data-mode="institution" role="tab">جامعة / مؤسسة</button>
     </div>
 
@@ -29,7 +30,7 @@
     <details class="settings">
       <summary>إعدادات الاتصال (اختياري)</summary>
       <label>مفتاح OpenAlex API (مجاني من openalex.org — يُنصح به لتجنّب حدّ الطلبات)
-        <input id="apiKey" type="text" autocomplete="off" placeholder="api_key">
+        <input id="apiKey" type="password" autocomplete="off" placeholder="api_key">
       </label>
       <label>الحد الأقصى للأوراق المفحوصة
         <select id="maxWorks">
