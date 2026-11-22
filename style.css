@@ -133,3 +133,20 @@ h4 { margin: 16px 0 4px; }
 .score-pill.high { background: var(--high-bg); color: var(--high); }
 .score-pill.med { background: var(--med-bg); color: var(--med); }
 .score-pill.low { background: var(--low-bg); color: var(--low); }
+
+/* ---------- شرح المصطلحات ---------- */
+.explain { margin-top: 6px; font-size: .9rem; }
+.explain summary { cursor: pointer; color: var(--accent); display: inline-block; font-weight: 600; }
+.explain summary::marker { content: ""; }
+.explain summary::before { content: "ⓘ "; }
+.explain[open] { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.explain p { margin: 4px 0; color: var(--text); }
+.glossary summary { cursor: pointer; }
+.gloss-item { border-top: 1px solid var(--border); padding: 8px 0; }
+.gloss-item h4 { margin: 4px 0; }
+.gloss-item p { margin: 3px 0; }
+@media print {
+  .glossary { break-before: page; }
+  .glossary summary::marker { content: ""; }
+  .gloss-item { break-inside: avoid; }
+}

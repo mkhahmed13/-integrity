@@ -171,6 +171,139 @@ function instLabel(i) {
   return `${i.display_name}${i.country_code ? ' (' + i.country_code + ')' : ''}`;
 }
 
+/* ---------- شرح المصطلحات ---------- */
+
+const GLOSSARY = {
+  score: {
+    title: 'التقييم (من 0 إلى 100)',
+    what: 'رقم يجمع كل المؤشرات اللي ظهرت للباحث: كل مؤشر "مرتفع" يضيف 25 نقطة، وكل مؤشر "متوسط" يضيف 10، والحد الأقصى 100.',
+    why: 'يساعدك ترتّب الباحثين وتعرف مين تبدأ تدقق عليه أولاً.',
+    normal: 'التقييم ليس حكماً. 50 أو أكثر يعني "يستحق التدقيق"، وأقل من 20 يعني لا شيء بارز. باحث نزيه قد يحصل على تقييم مرتفع بسبب طبيعة مجاله.',
+  },
+  position: {
+    title: 'المنصب الأكاديمي',
+    what: 'الرتبة الوظيفية للباحث (أستاذ، أستاذ مشارك، أستاذ مساعد…) والقسم والجامعة وفترة العمل.',
+    why: 'تعرف مين صاحب الأبحاث فعلاً، وهل منصبه يتناسب مع حجم إنتاجه وانتماءاته.',
+    normal: 'المعلومة من ORCID والباحث يكتبها بنفسه، فقد تكون قديمة أو ناقصة. تأكد من موقع الجامعة.',
+  },
+  hyperprolific: {
+    title: 'نشر مفرط (Hyperprolific)',
+    what: 'الباحث نشر أكثر من 72 ورقة في سنة واحدة، يعني ورقة كل 5 أيام تقريباً. هذا التعريف من دراسة منشورة في مجلة Nature سنة 2018.',
+    why: 'من الصعب جداً أن يساهم شخص واحد مساهمة حقيقية في هذا العدد. قد يعني أن اسمه يُضاف لأوراق لم يعمل عليها (تأليف شرفي) أو أنه يشتري مقاعد تأليف.',
+    normal: 'في المجالات اللي فيها فرق ضخمة (مثل فيزياء الجسيمات أو الدراسات الطبية الكبيرة) يكون في الورقة مئات المؤلفين، وهذا طبيعي هناك.',
+  },
+  spike: {
+    title: 'قفزة مفاجئة في عدد الأوراق',
+    what: 'عدد أوراق الباحث في سنة معيّنة صار 3 أضعاف أو أكثر مقارنة بالسنوات اللي قبلها (مثلاً من 5 أوراق إلى 30).',
+    why: 'الإنتاج الحقيقي يزيد بالتدريج. القفزة الحادة قد ترتبط بشراء أوراق من "مصانع الأبحاث" أو الدخول في شبكات تبادل أسماء.',
+    normal: 'قد تكون طبيعية إذا حصل الباحث على تمويل كبير، أو أصبح مشرفاً على طلاب دكتوراه كثيرين، أو انضم لفريق بحثي كبير.',
+  },
+  retracted: {
+    title: 'أوراق مسحوبة',
+    what: 'أوراق نشرتها المجلة ثم ألغتها رسمياً بعد ما اكتشفت فيها مشكلة. البيانات من قاعدة Retraction Watch.',
+    why: 'أقوى مؤشر رسمي، لأن المجلة نفسها اعترفت بوجود مشكلة. الأسباب تشمل التلاعب بالبيانات، أو السرقة العلمية، أو التحكيم المزيّف.',
+    normal: 'بعض الأوراق تُسحب بسبب خطأ نزيه يكتشفه الباحث بنفسه، وهذا يُحسب له. اقرأ إشعار السحب لتعرف السبب.',
+  },
+  tortured: {
+    title: 'عبارات معذّبة (Tortured phrases)',
+    what: 'مصطلحات علمية معروفة مكتوبة بصياغة غريبة، مثل "counterfeit consciousness" (الوعي المزيّف) بدل "artificial intelligence" (الذكاء الاصطناعي)، أو "bosom malignant growth" بدل "breast cancer".',
+    why: 'تظهر عندما يأخذ شخص نصاً منشوراً ويمرّره على أداة إعادة صياغة آلية لإخفاء النقل. أي متخصص حقيقي لا يكتب بهذه الطريقة، فهي من أقوى علامات مصانع الأبحاث.',
+    normal: 'نادراً ما تكون بريئة، لكن تأكد بقراءة الجملة في الورقة نفسها.',
+  },
+  massVenue: {
+    title: 'مجلات شهدت سحوبات جماعية',
+    what: 'مجلات سحبت آلاف الأوراق دفعة واحدة بعد اكتشاف أن أعداداً كاملة منها كانت مخترقة من مصانع الأبحاث، مثل بعض مجلات دار Hindawi سنة 2023.',
+    why: 'النشر المتكرر فيها، خصوصاً في "الأعداد الخاصة"، قد يعني أن الباحث استخدم قنوات نشر سهلة أو مشبوهة.',
+    normal: 'هذه المجلات نشرت أيضاً أوراقاً سليمة كثيرة، فورقة أو ورقتان لا تعني شيئاً بحد ذاتها.',
+  },
+  concentration: {
+    title: 'تركّز النشر في مجلة واحدة',
+    what: 'أكثر من 30% من أوراق الباحث منشورة في مجلة واحدة.',
+    why: 'قد يدل على علاقة خاصة مع رئيس التحرير أو أن الباحث نفسه محرر فيها وينشر لنفسه ولأصحابه.',
+    normal: 'في التخصصات الضيقة جداً قد توجد مجلة رئيسية واحدة ينشر فيها الجميع.',
+  },
+  selfcite: {
+    title: 'الاستشهاد الذاتي',
+    what: 'نسبة المراجع في أوراق الباحث اللي تشير إلى أوراقه هو. مثلاً 30% تعني أن ثلث المراجع اللي يذكرها هي أبحاثه.',
+    why: 'الاستشهادات ترفع "مؤشر h" وترتيب الباحث. الإفراط في الاستشهاد بالنفس يضخّم هذه الأرقام بشكل مصطنع.',
+    normal: 'المعدل الطبيعي غالباً أقل من 10–15%. الباحث اللي يبني على شغله السابق في موضوع ضيق قد تكون نسبته أعلى قليلاً.',
+  },
+  dualAffiliation: {
+    title: 'انتماءات مزدوجة في دول مختلفة',
+    what: 'الباحث يكتب في نفس الورقة أنه يتبع جامعتين أو أكثر في دول مختلفة. مثلاً جامعة في الهند وجامعة في السعودية في الوقت نفسه.',
+    why: 'بعض الجامعات تدفع لباحثين مشهورين من الخارج مقابل إضافة اسمها كانتماء ثانٍ في أبحاثهم، لترتفع في التصنيفات العالمية دون أن يعمل الباحث فيها فعلاً. هذا ما يُسمّى "الانتماء مقابل المال".',
+    normal: 'التعاون الدولي الحقيقي شائع: أستاذ زائر، أو إجازة تفرغ علمي، أو مشروع مشترك. الشك يزيد إذا كانت الجامعة الثانية تظهر في عدد كبير من الأوراق دون وجود فعلي للباحث فيها.',
+  },
+  dispersion: {
+    title: 'تشتّت التخصصات',
+    what: 'الباحث ينشر في 7 مجالات أو أكثر متباعدة، مثل الطب والهندسة والاقتصاد والكيمياء، دون أن يغلب عليه تخصص واحد.',
+    why: 'الباحث الحقيقي عادة متخصص في مجال أو مجالين. التشتّت الكبير قد يعني أن اسمه يُضاف لأوراق خارج تخصصه (تأليف شرفي أو مدفوع).',
+    normal: 'المتخصصون في الإحصاء أو الذكاء الاصطناعي يتعاونون طبيعياً مع مجالات كثيرة.',
+  },
+  yearly: {
+    title: 'الإنتاج السنوي',
+    what: 'عدد الأوراق المنشورة كل سنة، ويُحسب على الأوراق الفعلية فقط بعد استبعاد المسودات ومجموعات البيانات والنسخ المكررة.',
+    why: 'يبيّن لك شكل المسيرة البحثية: نمو تدريجي طبيعي، أو قفزات مفاجئة. الأعمدة الحمراء سنوات تجاوز فيها 72 ورقة.',
+    normal: '',
+  },
+  affiliations: {
+    title: 'الانتماءات كما تظهر في الأوراق',
+    what: 'كل الجامعات والجهات اللي كتبها الباحث في أوراقه، مع عدد الأوراق والفترة لكل جهة.',
+    why: 'انتبه لجامعة تظهر فجأة بعدد كبير من الأوراق في سنوات قليلة، خصوصاً إذا كانت في دولة غير دولة عمل الباحث.',
+    normal: 'تغيّر الجامعة مع الانتقال الوظيفي طبيعي، ويظهر كفترات متتالية لا متداخلة.',
+  },
+  venues: {
+    title: 'المجلات',
+    what: 'أكثر المجلات اللي نشر فيها الباحث. المجلات المعلّمة "سحوبات جماعية" سبق أن سحبت آلاف الأوراق.',
+    why: 'نوعية المجلات تعكس جودة النشر. النشر الكثيف في مجلات سريعة النشر أو مشبوهة يستحق الانتباه.',
+    normal: '',
+  },
+  fields: {
+    title: 'المجالات',
+    what: 'توزيع أوراق الباحث على المجالات العلمية حسب تصنيف OpenAlex.',
+    why: 'يبيّن تخصص الباحث الفعلي، ويكشف إذا كان ينشر في مجالات بعيدة عن تخصصه.',
+    normal: '',
+  },
+  secondaryAff: {
+    title: 'انتماء أساسي خارج الجامعة',
+    what: 'باحث ينشر أوراقاً باسم الجامعة، لكن جامعته الأساسية الحالية في دولة أخرى.',
+    why: 'إذا كان كثير من أكثر الناشرين باسم الجامعة يعملون فعلياً في الخارج، فقد تكون الجامعة تشتري الانتماءات لرفع تصنيفها.',
+    normal: 'الأساتذة الزائرون والمتعاونون الحقيقيون موجودون في كل جامعة. الشك يزيد عندما يكون العدد كبيراً والباحثون من الأكثر استشهاداً عالمياً.',
+  },
+  deptMethod: {
+    title: 'كيف يُحدَّد القسم؟',
+    what: 'قواعد البيانات المفتوحة لا تسجّل القسم اللي يعمل فيه الباحث. لذلك إما نجمع الباحثين حسب تخصص أوراقهم، أو تلصق أنت أسماء أعضاء القسم من موقع الجامعة.',
+    why: 'طريقة التخصص سريعة وتكشف كل من ينشر باسم الجامعة في هذا المجال، حتى من خارجها. طريقة الأسماء أدق لأعضاء القسم الفعليين.',
+    normal: 'في طريقة التخصص قد يظهر باحثون من أقسام أخرى نشروا في نفس المجال.',
+  },
+};
+
+function explain(key) {
+  const g = GLOSSARY[key];
+  if (!g) return '';
+  return `<details class="explain no-print"><summary>ايش يعني؟</summary>
+    <p><b>المعنى:</b> ${esc(g.what)}</p>
+    ${g.why ? `<p><b>ليش مهم:</b> ${esc(g.why)}</p>` : ''}
+    ${g.normal ? `<p><b>متى يكون طبيعياً:</b> ${esc(g.normal)}</p>` : ''}
+  </details>`;
+}
+
+function glossarySection() {
+  return `
+  <section class="card glossary">
+    <details>
+      <summary><h3 style="display:inline">📖 دليل المصطلحات: ايش يعني كل مؤشر؟</h3></summary>
+      ${Object.values(GLOSSARY).map((g) => `
+        <div class="gloss-item">
+          <h4>${esc(g.title)}</h4>
+          <p><b>المعنى:</b> ${esc(g.what)}</p>
+          ${g.why ? `<p><b>ليش مهم:</b> ${esc(g.why)}</p>` : ''}
+          ${g.normal ? `<p><b>متى يكون طبيعياً:</b> ${esc(g.normal)}</p>` : ''}
+        </div>`).join('')}
+    </details>
+  </section>`;
+}
+
 /* ---------- البحث ---------- */
 
 async function onSearch(e) {
@@ -309,7 +442,7 @@ function buildAuthorReport(author, allWorks) {
   if (hyperYears.length) {
     const peak = Math.max(...hyperYears.map((y) => years[y]));
     flags.push({
-      level: bigCollab ? 'info' : 'high',
+      key: 'hyperprolific', level: bigCollab ? 'info' : 'high',
       title: 'نشر مفرط (Hyperprolific)',
       text: `نشر أكثر من ${HYPERPROLIFIC} ورقة في ${hyperYears.length} سنة (${hyperYears.join('، ')})، وبلغت الذروة ${peak} ورقة/سنة — أي ورقة كل ${(365 / peak).toFixed(1)} يوم.` +
         (bigCollab ? ` لكن الوسيط ${medianAuthors} مؤلفاً لكل ورقة، ما يدل على تعاونات ضخمة (مثل فيزياء الجسيمات) وهذا شائع ومقبول هناك.` : ''),
@@ -324,13 +457,13 @@ function buildAuthorReport(author, allWorks) {
     if (years[y] >= 15 && years[y] >= Math.max(prev, 2) * 3) spikes.push(`${y}: ${years[y]} (مقابل ~${prev} قبلها)`);
   }
   if (spikes.length) {
-    flags.push({ level: 'med', title: 'قفزة مفاجئة في عدد الأوراق', text: `تضاعف الإنتاج 3 مرات أو أكثر خلال سنة: ${spikes.join(' · ')}. القفزات الحادة قد ترتبط بشراء التأليف أو مصانع الأبحاث، أو بتغيير المنصب/الانضمام لفريق كبير.` });
+    flags.push({ key: 'spike', level: 'med', title: 'قفزة مفاجئة في عدد الأوراق', text: `تضاعف الإنتاج 3 مرات أو أكثر خلال سنة: ${spikes.join(' · ')}. القفزات الحادة قد ترتبط بشراء التأليف أو مصانع الأبحاث، أو بتغيير المنصب/الانضمام لفريق كبير.` });
   }
 
   // 2) أوراق مسحوبة
   const retracted = allWorks.filter((w) => w.is_retracted);
   if (retracted.length) {
-    flags.push({ level: 'high', title: `أوراق مسحوبة (${retracted.length})`, text: 'أوراق سحبتها المجلات رسمياً (بيانات Retraction Watch/Crossref). راجع إشعار السحب لمعرفة السبب: احتيال، تلاعب بالتحكيم، سرقة، أو خطأ نزيه.' });
+    flags.push({ key: 'retracted', level: 'high', title: `أوراق مسحوبة (${retracted.length})`, text: 'أوراق سحبتها المجلات رسمياً (بيانات Retraction Watch/Crossref). راجع إشعار السحب لمعرفة السبب: احتيال، تلاعب بالتحكيم، سرقة، أو خطأ نزيه.' });
   }
 
   // 3) عبارات معذّبة
@@ -343,7 +476,7 @@ function buildAuthorReport(author, allWorks) {
     if (filtered.length) tortured.push({ work: w, phrases: filtered });
   }
   if (tortured.length) {
-    flags.push({ level: 'high', title: `عبارات معذّبة (Tortured phrases) في ${tortured.length} ورقة`, text: 'صياغات غريبة مثل "counterfeit consciousness" بدل "artificial intelligence" تنتج عن أدوات إعادة الصياغة الآلية لإخفاء النقل، وهي من أقوى مؤشرات مصانع الأبحاث.' });
+    flags.push({ key: 'tortured', level: 'high', title: `عبارات معذّبة (Tortured phrases) في ${tortured.length} ورقة`, text: 'صياغات غريبة مثل "counterfeit consciousness" بدل "artificial intelligence" تنتج عن أدوات إعادة الصياغة الآلية لإخفاء النقل، وهي من أقوى مؤشرات مصانع الأبحاث.' });
   }
 
   // 4) مجلات سحوبات جماعية
@@ -356,11 +489,11 @@ function buildAuthorReport(author, allWorks) {
     if (MASS_RETRACTION_VENUES.includes(v.toLowerCase())) massVenue.push(w);
   }
   if (massVenue.length) {
-    flags.push({ level: massVenue.length >= 5 ? 'high' : 'med', title: `أوراق في مجلات شهدت سحوبات جماعية (${massVenue.length})`, text: 'مجلات أو سلاسل مؤتمرات سحبت آلاف الأوراق بسبب مصانع الأبحاث والتحكيم المزيّف (مثل أعداد Hindawi الخاصة). ليست دليلاً بذاتها، لكنها تستحق المراجعة.' });
+    flags.push({ key: 'massVenue', level: massVenue.length >= 5 ? 'high' : 'med', title: `أوراق في مجلات شهدت سحوبات جماعية (${massVenue.length})`, text: 'مجلات أو سلاسل مؤتمرات سحبت آلاف الأوراق بسبب مصانع الأبحاث والتحكيم المزيّف (مثل أعداد Hindawi الخاصة). ليست دليلاً بذاتها، لكنها تستحق المراجعة.' });
   }
   const topVenues = Object.entries(venueCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
   if (works.length >= 20 && topVenues.length && topVenues[0][1] / works.length > 0.3) {
-    flags.push({ level: 'med', title: 'تركّز النشر في مجلة واحدة', text: `${pct(topVenues[0][1] / works.length)} من الأوراق في "${topVenues[0][0]}". التركّز الشديد قد يشير إلى علاقة خاصة بهيئة التحرير أو أعداد خاصة.` });
+    flags.push({ key: 'concentration', level: 'med', title: 'تركّز النشر في مجلة واحدة', text: `${pct(topVenues[0][1] / works.length)} من الأوراق في "${topVenues[0][0]}". التركّز الشديد قد يشير إلى علاقة خاصة بهيئة التحرير أو أعداد خاصة.` });
   }
 
   // 5) الاستشهاد الذاتي (المراجع التي تشير لأوراق الباحث نفسه)
@@ -370,7 +503,7 @@ function buildAuthorReport(author, allWorks) {
   }
   const selfRate = totalRefs ? selfRefs / totalRefs : 0;
   if (totalRefs >= 100 && selfRate > 0.15) {
-    flags.push({ level: selfRate > 0.25 ? 'high' : 'med', title: `استشهاد ذاتي مرتفع (${pct(selfRate)})`, text: `${num(selfRefs)} من أصل ${num(totalRefs)} مرجعاً في أوراقه تشير إلى أوراقه هو. المعدل المعتاد أقل من ~10–15%. الاستشهاد الذاتي المفرط يضخّم مؤشر h اصطناعياً.` + (truncated ? ' (محسوب على الأوراق المجلوبة فقط، والرقم الحقيقي قد يكون أعلى).' : '') });
+    flags.push({ key: 'selfcite', level: selfRate > 0.25 ? 'high' : 'med', title: `استشهاد ذاتي مرتفع (${pct(selfRate)})`, text: `${num(selfRefs)} من أصل ${num(totalRefs)} مرجعاً في أوراقه تشير إلى أوراقه هو. المعدل المعتاد أقل من ~10–15%. الاستشهاد الذاتي المفرط يضخّم مؤشر h اصطناعياً.` + (truncated ? ' (محسوب على الأوراق المجلوبة فقط، والرقم الحقيقي قد يكون أعلى).' : '') });
   }
 
   // 6) الانتماءات: مؤسسات الباحث كما تظهر في أوراقه، والانتماء المزدوج بين دول مختلفة
@@ -397,7 +530,7 @@ function buildAuthorReport(author, allWorks) {
   }
   const instList = Object.values(instStats).sort((a, b) => b.count - a.count);
   if (works.length >= 10 && multiCountry / works.length > 0.25) {
-    flags.push({ level: multiCountryRecent.length >= 10 ? 'high' : 'med', title: `انتماءات مزدوجة في دول مختلفة (${multiCountry} ورقة)`, text: `يذكر الباحث في ${pct(multiCountry / works.length)} من أوراقه انتماءً لمؤسستين أو أكثر في دول مختلفة. هذا النمط قد يكون تعاوناً مشروعاً، لكنه أيضاً علامة معروفة على "الانتماء مقابل المال" لرفع تصنيف الجامعات (خصوصاً بين الباحثين الأكثر استشهاداً).` });
+    flags.push({ key: 'dualAffiliation', level: multiCountryRecent.length >= 10 ? 'high' : 'med', title: `انتماءات مزدوجة في دول مختلفة (${multiCountry} ورقة)`, text: `يذكر الباحث في ${pct(multiCountry / works.length)} من أوراقه انتماءً لمؤسستين أو أكثر في دول مختلفة. هذا النمط قد يكون تعاوناً مشروعاً، لكنه أيضاً علامة معروفة على "الانتماء مقابل المال" لرفع تصنيف الجامعات (خصوصاً بين الباحثين الأكثر استشهاداً).` });
   }
 
   // 7) تشتّت التخصصات
@@ -406,7 +539,7 @@ function buildAuthorReport(author, allWorks) {
   const fieldList = Object.entries(fields).sort((a, b) => b[1] - a[1]);
   const fieldTotal = fieldList.reduce((s, [, n]) => s + n, 0);
   if (fieldTotal >= 30 && fieldList.length >= 7 && fieldList[0][1] / fieldTotal < 0.4) {
-    flags.push({ level: 'med', title: `تشتّت غير معتاد في التخصصات (${fieldList.length} مجالات)`, text: 'النشر في مجالات متباعدة جداً دون تخصص واضح قد يدل على إضافة الاسم كمؤلف شرفي أو شراء مقاعد تأليف.' });
+    flags.push({ key: 'dispersion', level: 'med', title: `تشتّت غير معتاد في التخصصات (${fieldList.length} مجالات)`, text: 'النشر في مجالات متباعدة جداً دون تخصص واضح قد يدل على إضافة الاسم كمؤلف شرفي أو شراء مقاعد تأليف.' });
   }
 
   const score = Math.min(100, flags.reduce((s, f) => s + (f.level === 'high' ? 25 : f.level === 'med' ? 10 : 0), 0));
@@ -462,7 +595,7 @@ function renderAuthor(author, works, r, employments) {
           <a href="https://www.google.com/search?q=${searchName}" target="_blank" rel="noopener">البحث عن صفحته الجامعية</a>
         </div>
       </div>
-      <div class="score ${level}"><b>${r.score}</b>${levelText}</div>
+      <div><div class="score ${level}"><b>${r.score}</b>${levelText}</div>${explain('score')}</div>
     </div>
     <div class="stats">
       <div class="stat"><span>الأوراق</span><b>${num(author.works_count)}</b></div>
@@ -478,41 +611,49 @@ function renderAuthor(author, works, r, employments) {
 
   <section class="card">
     <h3>🎓 المنصب الأكاديمي</h3>
+    ${explain('position')}
     ${position}
     <p class="muted">المنصب مأخوذ من ORCID (يُدخله الباحث بنفسه). للتأكد راجع صفحة الباحث في موقع الجامعة.</p>
   </section>
 
   <section class="card">
     <h3>🚩 المؤشرات</h3>
-    ${r.flags.length ? r.flags.map((f) => `<div class="flag ${f.level}"><h4>${esc(f.title)} <span class="tag ${f.level}">${{ high: 'مرتفع', med: 'متوسط', info: 'معلومة' }[f.level]}</span></h4><p>${esc(f.text)}</p></div>`).join('') : '<p>لم تُرصد مؤشرات بارزة في البيانات المتاحة.</p>'}
+    ${r.flags.length ? r.flags.map((f) => `<div class="flag ${f.level}"><h4>${esc(f.title)} <span class="tag ${f.level}">${{ high: 'مرتفع', med: 'متوسط', info: 'معلومة' }[f.level]}</span></h4><p>${esc(f.text)}</p>${explain(f.key)}</div>`).join('') : '<p>لم تُرصد مؤشرات بارزة في البيانات المتاحة.</p>'}
   </section>
 
   <section class="card">
     <h3>📈 الإنتاج السنوي</h3>
+    ${explain('yearly')}
     <div class="bars">${recentYears.map((y) => `<div class="bar ${r.years[y] > HYPERPROLIFIC ? 'hot' : ''}" style="height:${(r.years[y] / maxYear) * 100}%" title="${y}: ${r.years[y]}"></div>`).join('')}</div>
     <div class="bar-labels">${recentYears.map((y) => `<span title="${y}: ${r.years[y]}">${String(y).slice(2)}</span>`).join('')}</div>
     <p class="muted">الأوراق الفعلية فقط (بدون مسودات أو تكرار). الأعمدة الحمراء: سنوات تجاوز فيها ${HYPERPROLIFIC} ورقة.</p>
   </section>
 
-  ${r.retracted.length ? `<section class="card"><h3>❌ الأوراق المسحوبة</h3>${table(['السنة', 'العنوان', 'روابط'], r.retracted.map((w) => paperRow(w)).join(''))}</section>` : ''}
+  ${r.retracted.length ? `<section class="card"><h3>❌ الأوراق المسحوبة</h3>
+    ${explain('retracted')}${table(['السنة', 'العنوان', 'روابط'], r.retracted.map((w) => paperRow(w)).join(''))}</section>` : ''}
 
-  ${r.tortured.length ? `<section class="card"><h3>🌀 أوراق بها عبارات معذّبة</h3>${table(['السنة', 'العنوان', 'روابط'], r.tortured.slice(0, 50).map((t) => paperRow(t.work, `<div>${t.phrases.map((p) => `<span class="tag high">"${esc(p)}" ← ${esc(TORTURED_PHRASES[p])}</span>`).join(' ')}</div>`)).join(''))}</section>` : ''}
+  ${r.tortured.length ? `<section class="card"><h3>🌀 أوراق بها عبارات معذّبة</h3>
+    ${explain('tortured')}${table(['السنة', 'العنوان', 'روابط'], r.tortured.slice(0, 50).map((t) => paperRow(t.work, `<div>${t.phrases.map((p) => `<span class="tag high">"${esc(p)}" ← ${esc(TORTURED_PHRASES[p])}</span>`).join(' ')}</div>`)).join(''))}</section>` : ''}
 
-  ${r.massVenue.length ? `<section class="card"><h3>⚠️ أوراق في مجلات شهدت سحوبات جماعية</h3>${table(['السنة', 'العنوان', 'روابط'], r.massVenue.slice(0, 50).map((w) => paperRow(w)).join(''))}</section>` : ''}
+  ${r.massVenue.length ? `<section class="card"><h3>⚠️ أوراق في مجلات شهدت سحوبات جماعية</h3>
+    ${explain('massVenue')}${table(['السنة', 'العنوان', 'روابط'], r.massVenue.slice(0, 50).map((w) => paperRow(w)).join(''))}</section>` : ''}
 
   <section class="card">
     <h3>🏛️ الانتماءات كما تظهر في الأوراق</h3>
+    ${explain('affiliations')}
     ${r.instList.length ? table(['المؤسسة', 'الدولة', 'عدد الأوراق', 'الفترة'], r.instList.slice(0, 15).map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.country || '')}</td><td>${num(i.count)}</td><td>${i.min < 9999 ? `${i.min} – ${i.max}` : ''}</td></tr>`).join('')) : '<p class="muted">لا توجد بيانات.</p>'}
     <p class="muted">انتبه لمؤسسة ثانوية تظهر فجأة بأعداد كبيرة في سنوات قليلة، خصوصاً إن كانت في دولة غير دولة عمل الباحث.</p>
   </section>
 
   <section class="card">
     <h3>📚 أكثر المجلات نشراً فيها</h3>
+    ${explain('venues')}
     ${table(['المجلة', 'عدد الأوراق'], r.topVenues.map(([v, n]) => `<tr><td>${esc(v)}${MASS_RETRACTION_VENUES.includes(v.toLowerCase()) ? ' <span class="tag med">سحوبات جماعية</span>' : ''}</td><td>${n}</td></tr>`).join(''))}
   </section>
 
   <section class="card">
     <h3>🧭 المجالات</h3>
+    ${explain('fields')}
     ${table(['المجال', 'النسبة'], r.fieldList.slice(0, 10).map(([f, n]) => `<tr><td>${esc(f)}</td><td>${pct(n / r.fieldTotal)}</td></tr>`).join(''))}
   </section>`;
 }
@@ -576,6 +717,7 @@ async function analyzeInstitution(instId) {
 
   <section class="card">
     <h3>🌍 أكثر الباحثين نشراً باسم المؤسسة (آخر 3 سنوات)</h3>
+    ${explain('secondaryAff')}
     <p class="muted">إذا كان كثير من أكثر الناشرين باسم الجامعة يعملون أساساً في جامعات بدول أخرى، فهذا نمط "الانتماء الثانوي" الذي يُستخدم لرفع التصنيف.</p>
     ${affRows.length ? table(['الباحث', 'أوراق باسم المؤسسة', 'الانتماء الحالي', 'تقييم', ''], affRows.map((r) => `<tr>
       <td>${esc(r.name)}</td><td>${num(r.count)}</td>
@@ -586,6 +728,7 @@ async function analyzeInstitution(instId) {
 
   <section class="card">
     <h3>⚡ أعلى ذروة إنتاج سنوي بين باحثي المؤسسة (آخر 5 سنوات)</h3>
+    ${explain('hyperprolific')}
     <p class="muted">أرقام تقريبية تشمل المسودات ومجموعات البيانات؛ اضغط "فحص" للحصول على العدد الدقيق للأوراق الفعلية.</p>
     ${prolific.length ? table(['الباحث', 'الذروة', 'السنة', 'إجمالي الأوراق', ''], prolific.map(({ a, peak }) => `<tr>
       <td>${esc(a.display_name)}</td>
@@ -596,6 +739,7 @@ async function analyzeInstitution(instId) {
 
   <section class="card">
     <h3>❌ أحدث الأوراق المسحوبة المرتبطة بالمؤسسة</h3>
+    ${explain('retracted')}
     ${retractedMeta.results.length ? table(['السنة', 'العنوان', 'روابط'], retractedMeta.results.map((w) => paperRow(w)).join('')) : '<p class="muted">لا توجد أوراق مسحوبة مسجّلة.</p>'}
   </section>`;
 }
@@ -619,6 +763,7 @@ async function selectDeptInstitution(instId) {
   $('#results').innerHTML = `
   <section class="card">
     <h3>🏫 فحص قسم في ${esc(inst.display_name)}</h3>
+    ${explain('deptMethod')}
     <p class="muted">قواعد البيانات المفتوحة لا تسجّل الأقسام، فاختر إحدى الطريقتين:</p>
 
     <h4>الطريقة 1: حسب التخصص</h4>
@@ -708,7 +853,7 @@ async function scanDept() {
         const works = await fetchAllWorks(row.id, max, true);
         const rep = buildAuthorReport(author, works);
         row.score = rep.score;
-        row.flags = rep.flags.filter((f) => f.level !== 'info').map((f) => ({ level: f.level, title: f.title }));
+        row.flags = rep.flags.filter((f) => f.level !== 'info').map((f) => ({ level: f.level, title: f.title, key: f.key }));
         row.retracted = rep.retracted.length;
       } catch (err) {
         row.error = err.message;
@@ -745,6 +890,7 @@ function renderDept() {
       <div class="stat"><span>أوراق مسحوبة</span><b>${num(retractedTotal)}</b></div>
       <div class="stat"><span>انتماء أساسي خارج الجامعة</span><b>${num(foreignCount)}</b></div>
     </div>
+    ${explain('secondaryAff')}${explain('score')}
     <div class="toolbar no-print" style="margin-top:12px">
       ${scanned.length < rows.filter((r) => r.id).length ? `<button class="btn" data-dept-scan="1" ${dept.running ? 'disabled' : ''}>${dept.running ? 'جارٍ الفحص…' : '🔍 فحص الكل'}</button>` : ''}
       <span class="muted">يُحلَّل حتى 400 ورقة لكل باحث. اضغط "تقرير" لتحليل كامل لأي باحث.</span>
@@ -756,7 +902,7 @@ function renderDept() {
       <td><b>${esc(r.name)}</b>${r.input && r.input.toLowerCase() !== r.name.toLowerCase() ? `<div class="muted">المُدخل: ${esc(r.input)}</div>` : ''}${r.count ? `<div class="muted">${num(r.count)} ورقة في التخصص</div>` : ''}</td>
       <td class="muted">${esc(r.lki.map(instLabel).join(' · ') || '—')} ${r.primaryHere ? '' : r.foreign.length ? '<span class="tag high">خارج الجامعة</span>' : ''}</td>
       <td>${r.score === null ? (r.error ? '<span class="muted">خطأ</span>' : '—') : `<span class="score-pill ${levelOf(r.score)}">${r.score}</span>`}</td>
-      <td>${(r.flags || []).map((f) => `<span class="tag ${f.level}">${esc(f.title)}</span>`).join(' ') || (r.score === 0 ? '<span class="muted">لا مؤشرات</span>' : '')}</td>
+      <td>${(r.flags || []).map((f) => `<span class="tag ${f.level}" title="${esc(GLOSSARY[f.key]?.what || '')}">${esc(f.title)}</span>`).join(' ') || (r.score === 0 ? '<span class="muted">لا مؤشرات</span>' : '')}</td>
       <td><button class="btn small" data-author="${esc(r.id)}">تقرير</button></td></tr>`).join(''))}
   </section>`;
 }
@@ -790,7 +936,12 @@ function exportPdf() {
 
 /* ---------- الربط ---------- */
 
+// عند الطباعة/PDF نفتح دليل المصطلحات ليظهر في التقرير
+window.addEventListener('beforeprint', () => document.querySelectorAll('.glossary details').forEach((d) => { d.dataset.wasOpen = d.open; d.open = true; }));
+window.addEventListener('afterprint', () => document.querySelectorAll('.glossary details').forEach((d) => { d.open = d.dataset.wasOpen === 'true'; }));
+
 document.addEventListener('DOMContentLoaded', () => {
+  $('#help').innerHTML = glossarySection();
   $('#apiKey').value = storage('oa_key');
   $('#apiKey').addEventListener('change', () => storage('oa_key', $('#apiKey').value.trim()));
   $('#searchForm').addEventListener('submit', onSearch);
