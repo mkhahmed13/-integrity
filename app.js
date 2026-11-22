@@ -127,6 +127,53 @@ async function oa(path, params = {}) {
   return res.json();
 }
 
+// خلفية الباحث من ORCID: المؤهلات، الجوائز، النبذة، الروابط الشخصية
+async function orcidSection(id, section, summaryKey) {
+  const res = await fetch(`${ORCID}/${id}/${section}`, { headers: { Accept: 'application/json' } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const out = [];
+  for (const g of data['affiliation-group'] || []) {
+    for (const sm of g.summaries || []) {
+      const e = sm[summaryKey];
+      if (!e) continue;
+      out.push({
+        role: e['role-title'] || '',
+        dept: e['department-name'] || '',
+        org: e.organization?.name || '',
+        country: e.organization?.address?.country || '',
+        start: e['start-date']?.year?.value || '',
+        end: e['end-date']?.year?.value || '',
+      });
+    }
+  }
+  return out.sort((a, b) => (b.end || b.start || 0) - (a.end || a.start || 0));
+}
+
+async function orcidBackground(orcid) {
+  const id = shortId(orcid);
+  try {
+    const [personRes, educations, qualifications, distinctions] = await Promise.all([
+      fetch(`${ORCID}/${id}/person`, { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : {})),
+      orcidSection(id, 'educations', 'education-summary'),
+      orcidSection(id, 'qualifications', 'qualification-summary'),
+      orcidSection(id, 'distinctions', 'distinction-summary'),
+    ]);
+    const urls = (personRes['researcher-urls']?.['researcher-url'] || [])
+      .map((u) => ({ name: u['url-name'] || '', url: u.url?.value || '' }))
+      .filter((u) => /^https?:\/\//i.test(u.url));
+    return {
+      bio: personRes.biography?.content || '',
+      keywords: (personRes.keywords?.keyword || []).map((k) => k.content).filter(Boolean),
+      urls,
+      degrees: [...educations, ...qualifications],
+      distinctions,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function orcidEmployments(orcid) {
   const id = shortId(orcid);
   try {
@@ -270,6 +317,12 @@ const GLOSSARY = {
     why: 'إذا كان كثير من أكثر الناشرين باسم الجامعة يعملون فعلياً في الخارج، فقد تكون الجامعة تشتري الانتماءات لرفع تصنيفها.',
     normal: 'الأساتذة الزائرون والمتعاونون الحقيقيون موجودون في كل جامعة. الشك يزيد عندما يكون العدد كبيراً والباحثون من الأكثر استشهاداً عالمياً.',
   },
+  background: {
+    title: 'خلفية الباحث',
+    what: 'المؤهلات العلمية (أين ومتى حصل على الدكتوراه مثلاً) والجوائز والنبذة من ORCID، وأزرار بحث جاهزة في قوقل عن سيرته وصفحته في الجامعة وأي أخبار عنه.',
+    why: 'تساعدك تتأكد هل الشخص فعلاً في المنصب اللي يدّعيه، وهل تخصص شهادته يتناسب مع المجالات اللي ينشر فيها، وهل سبق ذُكر في قضايا سحب أو مخالفات.',
+    normal: 'بيانات ORCID يكتبها الباحث بنفسه وكثيرون لا يكملونها، فغيابها لا يعني شيئاً. ونتائج قوقل قد تخلط بين أشخاص بنفس الاسم، فتأكد أنك تقرأ عن الشخص الصحيح.',
+  },
   relation: {
     title: 'علاقة الباحث الخارجي بالجامعة',
     what: 'الباحث من خارج الجامعة يظهر في نتائجها لسببين: إما أنه يكتب اسم الجامعة كانتماء له في أوراقه (منتسب)، أو أن معه في الورقة مؤلفين من الجامعة (تعاون فقط).',
@@ -404,13 +457,16 @@ async function analyzeAuthor(idOrOrcid) {
   const author = await oa('/authors/' + idOrOrcid);
   const authorId = shortId(author.id);
   const max = Number($('#maxWorks').value);
-  const [works, employments] = await Promise.all([
+  const mainInst = lastInstitutions(author)[0];
+  const [works, employments, background, instInfo] = await Promise.all([
     fetchAllWorks(authorId, max),
     author.orcid ? orcidEmployments(author.orcid) : Promise.resolve(null),
+    author.orcid ? orcidBackground(author.orcid) : Promise.resolve(null),
+    mainInst?.id ? oa('/institutions/' + shortId(mainInst.id), { select: 'id,display_name,homepage_url' }).catch(() => null) : Promise.resolve(null),
   ]);
   setStatus('');
   const report = buildAuthorReport(author, works);
-  renderAuthor(author, works, report, employments);
+  renderAuthor(author, works, report, employments, background, instInfo);
   if (dept.rows.length) {
     $('#results').insertAdjacentHTML('afterbegin', '<div class="toolbar no-print"><button class="btn small" data-dept-back="1">→ رجوع لنتائج القسم</button></div>');
   }
@@ -577,7 +633,7 @@ function table(head, rows) {
   return `<div class="table-wrap"><table><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function renderAuthor(author, works, r, employments) {
+function renderAuthor(author, works, r, employments, background, instInfo) {
   const level = r.score >= 50 ? 'high' : r.score >= 20 ? 'med' : 'low';
   const levelText = { high: 'يستحق التدقيق', med: 'مؤشرات متوسطة', low: 'لا مؤشرات بارزة' }[level];
   const lastInst = lastInstitutions(author);
@@ -628,6 +684,8 @@ function renderAuthor(author, works, r, employments) {
     <p class="muted">المنصب مأخوذ من ORCID (يُدخله الباحث بنفسه). للتأكد راجع صفحة الباحث في موقع الجامعة.</p>
   </section>
 
+  ${backgroundSection(author, background, instInfo)}
+
   <section class="card">
     <h3>🚩 المؤشرات</h3>
     ${r.flags.length ? r.flags.map((f) => `<div class="flag ${f.level}"><h4>${esc(f.title)} <span class="tag ${f.level}">${{ high: 'مرتفع', med: 'متوسط', info: 'معلومة' }[f.level]}</span></h4><p>${esc(f.text)}</p>${explain(f.key)}</div>`).join('') : '<p>لم تُرصد مؤشرات بارزة في البيانات المتاحة.</p>'}
@@ -667,6 +725,61 @@ function renderAuthor(author, works, r, employments) {
     <h3>🧭 المجالات</h3>
     ${explain('fields')}
     ${table(['المجال', 'النسبة'], r.fieldList.slice(0, 10).map(([f, n]) => `<tr><td>${esc(f)}</td><td>${pct(n / r.fieldTotal)}</td></tr>`).join(''))}
+  </section>`;
+}
+
+/* ---------- خلفية الباحث ---------- */
+
+function googleLink(label, hint, query) {
+  return `<a class="gcheck" href="https://www.google.com/search?q=${encodeURIComponent(query)}" target="_blank" rel="noopener"><b>${esc(label)}</b><span>${esc(hint)}</span></a>`;
+}
+
+function backgroundSection(author, bg, instInfo) {
+  const name = author.display_name;
+  const q = `"${name}"`;
+  const inst = lastInstitutions(author)[0];
+  let domain = '';
+  try { domain = instInfo?.homepage_url ? new URL(instInfo.homepage_url).hostname.replace(/^www\./, '') : ''; } catch { domain = ''; }
+
+  const checks = [
+    domain ? googleLink('صفحته في موقع الجامعة', `هل هو فعلاً ضمن منسوبي ${domain}؟ وما رتبته؟`, `site:${domain} ${q}`) : '',
+    googleLink('السيرة الذاتية (CV)', 'سيرته المنشورة: الشهادات والمناصب السابقة', `${q} CV OR "curriculum vitae" OR resume`),
+    googleLink('لينكدإن', 'خبراته الوظيفية كما يعرضها بنفسه', `site:linkedin.com/in ${q}${inst ? ` "${inst.display_name}"` : ''}`),
+    googleLink('أخبار سحب أو مخالفات', 'هل ذُكر في قضايا سحب أو احتيال أو مصانع أبحاث؟', `${q} retraction OR misconduct OR "paper mill" OR fraud OR plagiarism`),
+    googleLink('Retraction Watch', 'الموقع الأشهر لرصد سحب الأوراق', `site:retractionwatch.com ${q}`),
+    googleLink('For Better Science', 'مدونة تكشف مصانع الأبحاث والتلاعب', `site:forbetterscience.com ${q}`),
+    googleLink('قائمة الأكثر استشهاداً', 'هل هو في قائمة Clarivate؟ ومع أي جامعة؟', `${q} "Highly Cited Researchers" Clarivate`),
+    googleLink('أخبار بالعربي', 'تغطية إعلامية عربية', `${q} جامعة OR دكتور OR باحث`),
+  ].filter(Boolean).join('');
+
+  let orcidPart;
+  if (!author.orcid) {
+    orcidPart = '<p class="muted">لا يوجد حساب ORCID مرتبط، فلا تتوفر بيانات المؤهلات تلقائياً. استخدم روابط البحث بالأسفل.</p>';
+  } else if (!bg) {
+    orcidPart = '<p class="muted">تعذّر جلب بيانات ORCID.</p>';
+  } else {
+    const degrees = bg.degrees.length
+      ? table(['المؤهل', 'التخصص/القسم', 'الجهة', 'السنة'], bg.degrees.map((d) => `<tr><td><b>${esc(d.role || '—')}</b></td><td>${esc(d.dept || '—')}</td><td>${esc(d.org)} ${d.country ? `<span class="muted">(${esc(d.country)})</span>` : ''}</td><td>${esc(d.end || d.start || '—')}</td></tr>`).join(''))
+      : '<p class="muted">لم يسجّل مؤهلاته في ORCID.</p>';
+    const awards = bg.distinctions.length
+      ? `<h4>🏅 الجوائز والتكريمات</h4><ul class="plain">${bg.distinctions.map((d) => `<li><b>${esc(d.role || 'تكريم')}</b> — ${esc(d.org)} ${d.start ? `(${esc(d.start)})` : ''}</li>`).join('')}</ul>` : '';
+    const bio = bg.bio ? `<h4>📝 النبذة التي كتبها</h4><p class="bio">${esc(bg.bio.length > 1200 ? bg.bio.slice(0, 1200) + '…' : bg.bio)}</p>` : '';
+    const kw = bg.keywords.length ? `<p class="muted">الكلمات المفتاحية: ${esc(bg.keywords.join('، '))}</p>` : '';
+    const urls = bg.urls.length
+      ? `<h4>🔗 روابطه الشخصية</h4><div class="links">${bg.urls.map((u) => `<a href="${esc(u.url)}" target="_blank" rel="noopener nofollow">${esc(u.name || u.url)}</a>`).join('')}</div>` : '';
+    orcidPart = `<h4>🎓 المؤهلات العلمية</h4>${degrees}${awards}${bio}${kw}${urls}`;
+  }
+
+  return `
+  <section class="card">
+    <h3>🔎 خلفية الباحث</h3>
+    ${explain('background')}
+    ${orcidPart}
+    <div class="no-print">
+      <h4>🌐 تحقّق في قوقل</h4>
+      <p class="muted">كل زر يفتح بحثاً جاهزاً في قوقل. قارن ما تجده بما في ORCID والأوراق.</p>
+      <div class="gchecks">${checks}</div>
+    </div>
   </section>`;
 }
 

@@ -180,3 +180,12 @@ a.btn { text-decoration: none; display: inline-block; }
 .pdf-mode td:first-child:not(:only-child) { white-space: normal; }
 .pdf-mode .stats { grid-template-columns: repeat(4, 1fr); }
 .pdf-mode .links a { color: #0b4f8a; }
+
+/* ---------- خلفية الباحث ---------- */
+.gchecks { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.gcheck { display: block; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; text-decoration: none; color: var(--text); background: var(--bg); }
+.gcheck b { display: block; color: var(--accent); }
+.gcheck span { font-size: .85rem; color: var(--muted); }
+.gcheck:hover { border-color: var(--accent); }
+.bio { white-space: pre-line; background: var(--bg); border-radius: 8px; padding: 8px 12px; }
+ul.plain { padding-inline-start: 20px; margin: 4px 0; }
