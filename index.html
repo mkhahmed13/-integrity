@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>رصد الأبحاث المشبوهة</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>🔎 رصد الأبحاث المشبوهة</h1>
+    <p class="sub">أداة مفتوحة تفحص سجلّ النشر لأي باحث أو جامعة وتُظهر المؤشرات التي تستحق التدقيق: أوراق مسحوبة، نشر مفرط، "عبارات معذّبة"، انتماءات مزدوجة مشبوهة، استشهاد ذاتي مرتفع، ومنصب الباحث الأكاديمي.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-mode="author" role="tab">باحث / دكتور</button>
+      <button class="tab" data-mode="institution" role="tab">جامعة / مؤسسة</button>
+    </div>
+
+    <form id="searchForm" class="search">
+      <input id="q" type="search" required placeholder="اسم الباحث بالإنجليزية، أو رقم ORCID مثل 0000-0002-1825-0097">
+      <button type="submit" class="btn">بحث</button>
+    </form>
+
+    <details class="settings">
+      <summary>إعدادات الاتصال (اختياري)</summary>
+      <label>مفتاح OpenAlex API (مجاني من openalex.org — يُنصح به لتجنّب حدّ الطلبات)
+        <input id="apiKey" type="text" autocomplete="off" placeholder="api_key">
+      </label>
+      <label>الحد الأقصى للأوراق المفحوصة
+        <select id="maxWorks">
+          <option value="200">200</option>
+          <option value="600" selected>600</option>
+          <option value="1000">1000</option>
+          <option value="2000">2000</option>
+        </select>
+      </label>
+    </details>
+  </section>
+
+  <div id="status" class="status" hidden></div>
+  <section id="results"></section>
+
+  <footer class="disclaimer">
+    <strong>تنبيه مهم:</strong> هذه المؤشرات آلية وإحصائية، وليست حكماً أو اتهاماً. وجود مؤشر لا يعني وجود مخالفة؛ قد يكون للباحث تفسير مشروع (فريق بحثي كبير، تعاونات دولية، أخطاء في قواعد البيانات تخلط بين باحثَين بنفس الاسم). تحقّق يدوياً دائماً من المصادر الأصلية قبل نشر أي ادعاء.
+    <br>مصادر البيانات: <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> · <a href="https://orcid.org" target="_blank" rel="noopener">ORCID</a> · بيانات السحب من <a href="https://retractionwatch.com" target="_blank" rel="noopener">Retraction Watch</a> عبر Crossref/OpenAlex.
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
