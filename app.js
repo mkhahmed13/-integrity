@@ -270,6 +270,18 @@ const GLOSSARY = {
     why: 'إذا كان كثير من أكثر الناشرين باسم الجامعة يعملون فعلياً في الخارج، فقد تكون الجامعة تشتري الانتماءات لرفع تصنيفها.',
     normal: 'الأساتذة الزائرون والمتعاونون الحقيقيون موجودون في كل جامعة. الشك يزيد عندما يكون العدد كبيراً والباحثون من الأكثر استشهاداً عالمياً.',
   },
+  relation: {
+    title: 'علاقة الباحث الخارجي بالجامعة',
+    what: 'الباحث من خارج الجامعة يظهر في نتائجها لسببين: إما أنه يكتب اسم الجامعة كانتماء له في أوراقه (منتسب)، أو أن معه في الورقة مؤلفين من الجامعة (تعاون فقط).',
+    why: 'الانتماء هو اللي يُحسب للجامعة في التصنيفات العالمية. باحث مشهور يعمل في دولة أخرى ويكتب الجامعة كانتماء في عشرات الأوراق، دون تعاون واضح مع منسوبيها، هو النمط المعروف لـ"شراء الانتماءات".',
+    normal: 'التعاون فقط (بدون كتابة الانتماء) طبيعي تماماً. والانتماء يكون طبيعياً إذا كان الباحث أستاذاً زائراً فعلياً أو مشاركاً في مشروع حقيقي مع دكاترة الجامعة.',
+  },
+  localLink: {
+    title: 'الدكتور حلقة الوصل',
+    what: 'منسوبو الجامعة اللي يظهرون مع الباحث الخارجي في الأوراق، مرتّبين حسب عدد الأوراق المشتركة، مع منصبهم من ORCID إن وُجد.',
+    why: 'إذا كان دكتور واحد من الجامعة موجوداً في أغلب أوراق الباحث الخارجي، فهو غالباً من جلب الباحث للجامعة أو يدير التعاون معه — وهو الشخص المعني بالسؤال.',
+    normal: 'المشاريع البحثية المشتركة الحقيقية تنتج أوراقاً كثيرة بين نفس الأشخاص، وهذا طبيعي إذا كان التخصص واحداً والعمل فعلياً.',
+  },
   deptMethod: {
     title: 'كيف يُحدَّد القسم؟',
     what: 'قواعد البيانات المفتوحة لا تسجّل القسم اللي يعمل فيه الباحث. لذلك إما نجمع الباحثين حسب تخصص أوراقهم، أو تلصق أنت أسماء أعضاء القسم من موقع الجامعة.',
@@ -663,6 +675,7 @@ function renderAuthor(author, works, r, employments) {
 async function analyzeInstitution(instId) {
   setStatus('جارٍ تحليل المؤسسة…');
   const inst = await oa('/institutions/' + instId);
+  ctxInst = inst;
   const id = shortId(inst.id);
   const year = new Date().getFullYear();
   const since = `${year - 3}-01-01`;
@@ -723,7 +736,7 @@ async function analyzeInstitution(instId) {
       <td>${esc(r.name)}</td><td>${num(r.count)}</td>
       <td class="muted">${esc(r.lki.map(instLabel).join(' · ') || '—')}</td>
       <td>${r.primaryHere ? '<span class="tag info">أساسي</span>' : r.foreign.length ? '<span class="tag high">ثانوي/أجنبي</span>' : r.listedHere ? '<span class="tag med">مشترك</span>' : '<span class="tag med">غير مدرج حالياً</span>'}</td>
-      <td><button class="btn small" data-author="${esc(r.id)}">فحص</button></td></tr>`).join('')) : '<p class="muted">لم تتوفر بيانات التجميع.</p>'}
+      <td class="btns"><button class="btn small" data-author="${esc(r.id)}">فحص</button>${r.primaryHere ? '' : `<button class="btn small alt" data-relation="${esc(r.id)}">العلاقة بالجامعة</button>`}</td></tr>`).join('')) : '<p class="muted">لم تتوفر بيانات التجميع.</p>'}
   </section>
 
   <section class="card">
@@ -757,6 +770,7 @@ async function selectDeptInstitution(instId) {
   const since = `${new Date().getFullYear() - 5}-01-01`;
   const subs = await oa('/works', { filter: `institutions.id:${shortId(inst.id)},from_publication_date:${since}`, group_by: 'primary_topic.subfield.id' });
   dept.inst = inst;
+  ctxInst = inst;
   setStatus('');
   const options = (subs.group_by || []).filter((g) => g.key && g.key !== 'unknown').slice(0, 80)
     .map((g) => `<option value="${esc(shortId(g.key))}">${esc(g.key_display_name)} (${num(g.count)})</option>`).join('');
@@ -903,7 +917,129 @@ function renderDept() {
       <td class="muted">${esc(r.lki.map(instLabel).join(' · ') || '—')} ${r.primaryHere ? '' : r.foreign.length ? '<span class="tag high">خارج الجامعة</span>' : ''}</td>
       <td>${r.score === null ? (r.error ? '<span class="muted">خطأ</span>' : '—') : `<span class="score-pill ${levelOf(r.score)}">${r.score}</span>`}</td>
       <td>${(r.flags || []).map((f) => `<span class="tag ${f.level}" title="${esc(GLOSSARY[f.key]?.what || '')}">${esc(f.title)}</span>`).join(' ') || (r.score === 0 ? '<span class="muted">لا مؤشرات</span>' : '')}</td>
-      <td><button class="btn small" data-author="${esc(r.id)}">تقرير</button></td></tr>`).join(''))}
+      <td class="btns"><button class="btn small" data-author="${esc(r.id)}">تقرير</button>${r.primaryHere ? '' : `<button class="btn small alt" data-relation="${esc(r.id)}">العلاقة بالجامعة</button>`}</td></tr>`).join(''))}
+  </section>`;
+}
+
+/* ---------- علاقة باحث خارجي بالجامعة ---------- */
+
+let ctxInst = null;
+let backHtml = '';
+
+async function analyzeRelation(authorId) {
+  const inst = ctxInst;
+  const instId = shortId(inst.id);
+  backHtml = $('#results').innerHTML;
+  setStatus('جارٍ تحليل علاقة الباحث بالجامعة…');
+  const [author, worksPage] = await Promise.all([
+    oa('/authors/' + authorId),
+    oa('/works', { filter: `author.id:${authorId},institutions.id:${instId}`, 'per-page': 200, select: 'id,doi,title,type,publication_year,primary_location,authorships', sort: 'publication_year:desc' }),
+  ]);
+  const works = worksPage.results;
+  const me = author.id;
+  const atInst = (a) => (a.institutions || []).some((i) => shortId(i.id) === instId);
+
+  let selfListed = 0;
+  const selfYears = [];
+  const locals = {};
+  const papers = [];
+  for (const w of works) {
+    const mine = (w.authorships || []).find((a) => a.author?.id === me);
+    const iList = mine && atInst(mine);
+    if (iList) { selfListed++; if (w.publication_year) selfYears.push(w.publication_year); }
+    const localNames = [];
+    const localIds = [];
+    for (const a of w.authorships || []) {
+      if (!a.author?.id || a.author.id === me || !atInst(a)) continue;
+      const k = shortId(a.author.id);
+      const l = locals[k] || (locals[k] = { id: k, name: a.author.display_name, count: 0 });
+      l.count++;
+      localNames.push(a.author.display_name);
+      localIds.push(k);
+    }
+    papers.push({ w, iList, localNames, localIds });
+  }
+  // نجلب جهة العمل الحالية لكل المؤلفين المرتبطين بالجامعة لنميّز منسوبيها الفعليين
+  const allLocals = Object.values(locals).sort((a, b) => b.count - a.count).slice(0, 150);
+  const info = allLocals.length ? await fetchAuthorsByIds(allLocals.map((l) => l.id)) : {};
+  for (const l of allLocals) {
+    const lki = info[l.id] ? lastInstitutions(info[l.id]) : [];
+    l.primaryHere = lki.length > 0 && shortId(lki[0].id) === instId;
+    l.lki = lki;
+  }
+  const staffAll = new Set(allLocals.filter((l) => l.primaryHere).map((l) => l.id));
+  const localList = [...allLocals].sort((a, b) => (b.primaryHere - a.primaryHere) || (b.count - a.count)).slice(0, 15);
+
+  // المنصب من ORCID لأبرز 6 (منسوبو الجامعة أولاً)
+  const norm = (x) => x.toLowerCase().replace(/[^a-z\u0600-\u06ff]+/g, '');
+  const target = norm(inst.display_name);
+  await Promise.all(localList.slice(0, 6).map(async (l) => {
+    const orcid = info[l.id]?.orcid;
+    if (!orcid) return;
+    const emp = await orcidEmployments(orcid);
+    const here = emp?.find((e) => !e.end && (norm(e.org).includes(target) || target.includes(norm(e.org))));
+    const cur = here || emp?.find((e) => !e.end);
+    if (cur) l.role = [cur.role, cur.dept].filter(Boolean).join(' — ');
+  }));
+  setStatus('');
+
+  const lki = lastInstitutions(author);
+  const primary = lki[0];
+  const yrs = selfYears.length ? `${Math.min(...selfYears)} – ${Math.max(...selfYears)}` : '—';
+  // منسوبو الجامعة الفعليون (جهة عملهم الأساسية هي الجامعة) مقابل خارجيين آخرين يكتبون الجامعة أيضاً
+  const staff = localList.filter((l) => l.primaryHere);
+  const withStaff = papers.filter((p) => p.localIds.some((id) => staffAll.has(id))).length;
+  const top = staff[0];
+  const share = works.length ? (top?.count || 0) / works.length : 0;
+  const staffShare = works.length ? withStaff / works.length : 0;
+
+  // الخلاصة بلغة بسيطة
+  const lines = [];
+  if (selfListed > 0) {
+    lines.push(`يكتب <b>${esc(inst.display_name)}</b> كانتماء له في <b>${selfListed}</b> ورقة (${esc(yrs)})، بينما جهة عمله الأساسية الحالية: <b>${esc(primary ? instLabel(primary) : 'غير معروفة')}</b>. هذه الأوراق تُحسب للجامعة في التصنيفات.`);
+    if (selfListed >= 10 && staffShare < 0.1) {
+      lines.push(`⚠️ <b>${pct(staffShare)} فقط</b> من هذه الأوراق فيها أحد من منسوبي الجامعة الفعليين. أي أن اسم الجامعة يُضاف إلى أوراقه دون تعاون واضح مع دكاترتها — وهذا النمط من أبرز علامات "الانتماء مقابل المال"، ويستحق التحقق من طبيعة عقده مع الجامعة.`);
+    } else {
+      lines.push(`${pct(staffShare)} من الأوراق فيها أحد من منسوبي الجامعة الفعليين، ما يدل على تعاون بحثي حقيقي بدرجة ما (أستاذ زائر/مشروع مشترك).`);
+    }
+  } else {
+    lines.push(`لا يكتب الجامعة كانتماء له. أوراقه مع الجامعة (${works.length}) سببها أن معه مؤلفين منها — أي <b>تعاون بحثي</b> وليس انتماءً، ولا تُحسب له كمنسوب.`);
+  }
+  if (top) lines.push(`أكثر دكتور من منسوبي الجامعة ينشر معه: <b>${esc(top.name)}</b>${top.role ? ` (${esc(top.role)})` : ''} في ${top.count} من ${works.length} ورقة (${pct(share)}).${share >= 0.2 ? ' هذا الشخص غالباً هو حلقة الوصل بين الباحث والجامعة.' : ''}`);
+  else lines.push('لا يظهر معه أي دكتور جهة عمله الأساسية هي الجامعة.');
+
+  $('#results').innerHTML = `
+  <div class="toolbar no-print"><button class="btn small" data-back="1">→ رجوع</button></div>
+  ${reportHeader('علاقة باحث بالجامعة', `${author.display_name} — ${inst.display_name}`)}
+  <section class="card">
+    <h2>${esc(author.display_name)}</h2>
+    <div class="muted">جهة العمل الحالية: ${esc(lki.map(instLabel).join(' · ') || 'غير معروفة')}</div>
+    <div class="stats">
+      <div class="stat"><span>أوراق مرتبطة بالجامعة</span><b>${num(works.length)}</b></div>
+      <div class="stat"><span>يكتب الجامعة كانتماء له</span><b>${num(selfListed)}</b></div>
+      <div class="stat"><span>فترة الانتماء</span><b>${esc(yrs)}</b></div>
+      <div class="stat"><span>أوراق فيها أحد منسوبي الجامعة</span><b>${num(withStaff)} <small>(${pct(staffShare)})</small></b></div>
+    </div>
+    <div class="flag info" style="margin-top:12px"><h4>الخلاصة</h4>${lines.map((l) => `<p>${l}</p>`).join('')}</div>
+    ${explain('relation')}
+  </section>
+
+  <section class="card">
+    <h3>👥 الدكاترة من الجامعة اللي ينشرون معه</h3>
+    ${explain('localLink')}
+    ${localList.length ? table(['الدكتور', 'أوراق مشتركة', 'المنصب (ORCID)', 'جهة العمل الحالية', ''], localList.map((l) => `<tr>
+      <td><b>${esc(l.name)}</b></td>
+      <td>${num(l.count)} <span class="muted">(${pct(l.count / works.length)})</span></td>
+      <td>${esc(l.role || '—')}</td>
+      <td class="muted">${esc(l.lki.map(instLabel).join(' · ') || '—')} ${l.primaryHere ? '<span class="tag info">من منسوبي الجامعة</span>' : '<span class="tag med">خارجي آخر يكتب الجامعة</span>'}</td>
+      <td><button class="btn small" data-author="${esc(l.id)}">تقرير</button></td></tr>`).join('')) : '<p class="muted">لا يوجد أي مؤلف من الجامعة معه في هذه الأوراق.</p>'}
+  </section>
+
+  <section class="card">
+    <h3>📄 الأوراق المرتبطة بالجامعة</h3>
+    ${table(['السنة', 'العنوان', 'روابط'], papers.slice(0, 100).map((p) => paperRow(p.w,
+      `<div>${p.iList ? '<span class="tag high">كتب الجامعة كانتماء له</span>' : '<span class="tag info">تعاون فقط</span>'}${p.localNames.length ? ` <span class="muted">مع: ${esc(p.localNames.join('، '))}</span>` : ''}</div>`)).join(''))}
+    ${works.length >= 200 ? '<p class="muted">يُعرض أحدث 200 ورقة فقط.</p>' : ''}
   </section>`;
 }
 
@@ -960,12 +1096,14 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#results').addEventListener('click', async (e) => {
     if (e.target.closest('button[data-pdf]')) { exportPdf(); return; }
     if (e.target.closest('button[data-dept-back]')) { renderDept(); return; }
-    const btn = e.target.closest('button[data-author], button[data-inst], button[data-dept-inst], button[data-dept-subfield], button[data-dept-names], button[data-dept-scan]');
+    if (e.target.closest('button[data-back]')) { $('#results').innerHTML = backHtml; return; }
+    const btn = e.target.closest('button[data-relation], button[data-author], button[data-inst], button[data-dept-inst], button[data-dept-subfield], button[data-dept-names], button[data-dept-scan]');
     if (!btn) return;
     btn.disabled = true;
     try {
       if (btn.dataset.deptScan) { await scanDept(); return; }
-      if (btn.dataset.author) await analyzeAuthor(btn.dataset.author);
+      if (btn.dataset.relation) await analyzeRelation(btn.dataset.relation);
+      else if (btn.dataset.author) await analyzeAuthor(btn.dataset.author);
       else if (btn.dataset.deptInst) await selectDeptInstitution(btn.dataset.deptInst);
       else if (btn.dataset.deptSubfield) await loadDeptBySubfield();
       else if (btn.dataset.deptNames) await loadDeptByNames();

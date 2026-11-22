@@ -150,3 +150,9 @@ h4 { margin: 16px 0 4px; }
   .glossary summary::marker { content: ""; }
   .gloss-item { break-inside: avoid; }
 }
+
+/* ---------- العلاقة بالجامعة ---------- */
+.btns { white-space: nowrap; }
+.btns .btn { margin: 2px; }
+.btn.alt { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.flag.info p { color: var(--text); margin: 4px 0; }
