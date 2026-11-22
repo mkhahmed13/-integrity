@@ -1173,11 +1173,11 @@ function buildPdfBlocks(host) {
         const tbl = it.matches('table') ? it : it.querySelector('table');
         const rows = [...tbl.querySelectorAll('tbody > tr')];
         const thead = tbl.querySelector('thead');
-        for (let i = 0; i < Math.max(rows.length, 1); i += 3) {
+        for (let i = 0; i < Math.max(rows.length, 1); i += 2) {
           const t = document.createElement('table');
           if (thead && i % 12 === 0) t.appendChild(thead.cloneNode(true));
           const tb = document.createElement('tbody');
-          rows.slice(i, i + 3).forEach((r) => tb.appendChild(r.cloneNode(true)));
+          rows.slice(i, i + 2).forEach((r) => tb.appendChild(r.cloneNode(true)));
           t.appendChild(tb);
           pending.push(t);
           flush();
@@ -1188,7 +1188,7 @@ function buildPdfBlocks(host) {
       } else {
         pending.push(it);
         if (!pending.some((n) => n.matches && n.matches('h2, h3'))) flush();
-        else if (pending.length > 2) flush();
+        else if (pending.length >= 2) flush();
       }
     }
     flush();
